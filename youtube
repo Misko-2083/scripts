@@ -118,7 +118,7 @@ done
     OPTION=${retChoice[1]}
     case $OPTION in
     "Normal")
-       UTUBE="-f 18"
+       UTUBE="-f bestvideo+bestaudio"
     ;;
     "Audio only (best)")
        UTUBE="-f 141/bestaudio"
