@@ -21,6 +21,9 @@
 #               PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS), EVEN IF SUCH HOLDER OR OTHER 
 #               PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
+# written by <damo> May 2016 @BunsenLabs
+# re-written by Misko_2083 <Miloš Pavlović> June 2016
+# Progress bar method used from Glutanimate's yad_wget script
 # Method used from Glutanimate's yad_wget script
 # https://github.com/Glutanimate/misc-scripts/blob/master/Internet/yad_wget
 
@@ -28,7 +31,7 @@
 # Set GUI variables up
 TITLE="YAD youtube-dl wrapper"                 # dialog title
 TEXT="   <b>Downloads</b> in progress:"        # dialog text
-ICON="distributor-logo-bunsenlabs"          # window icon (appears in launcher)
+ICON="browser-download"          # window icon (appears in launcher)
 IMAGE="browser-download"                    # window image (appears in dialog)
 
 # Check youtube-dl is installed
@@ -115,7 +118,7 @@ done
     OPTION=${retChoice[1]}
     case $OPTION in
     "Normal")
-       UTUBE=""
+       UTUBE="-f 18"
     ;;
     "Audio only (best)")
        UTUBE="-f 141/bestaudio"
