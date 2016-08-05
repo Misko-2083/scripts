@@ -35,7 +35,7 @@ ICON="browser-download"          # window icon (appears in launcher)
 IMAGE="browser-download"                    # window image (appears in dialog)
 
 # Check youtube-dl is installed
-if ! type youtube-dl &>/dev/null;then
+if ! hash youtube-dl &>/dev/null;then
     DLG=$(yad --form --window-icon "$ICON" \
         --borders=10 \
         --text="   youtube-dl not found\n\n  Install it first and run the script again" --button="gtk-ok:0" \
@@ -45,16 +45,20 @@ if ! type youtube-dl &>/dev/null;then
 fi
 
 download() {
-  youtube-dl $UTUBE --newline -i -o "$SAVEDIR/%(id)s.%(ext)s" "$1" 2>&1 \
-  | while read line; do
+   cd $SAVEDIR
+  youtube-dl ${UTUBE} --newline -i -o "%(title)s-%(id)s.%(ext)s" "https://www.youtube.com/watch?v=$1" 2>&1 \
+  | while read -r line; do
      echo "$2:#Preparing to download $1"
 
      if [[ "$(echo $line | grep '[0-9]*%')" ]];then
         percent=$(echo $line | awk '{print $2}')
-        echo "$2:${percent%.*}%"
+        if [[ ! "$(echo "${percent}" | grep "100")" ]]; then  #do not print 100% yet in case of conversion (mp3)
+           echo "$2:${percent%.*}%"
+        fi
+
      fi
 
-     if [[ "$(echo $line | grep '\[download\]')" ]];then
+     if [[ "$(echo $line | grep -E '\[download\]|\[ffmpeg\]')" ]];then
         progress=$(echo $line | awk '{$1=""; print $0}')
         echo "$2:#$progress"
      fi
@@ -75,9 +79,9 @@ while :; do
     ENTRY=$(yad --form --columns=1 --window-icon "$ICON" --center \
         --borders=10 --title "$TITLE" --image "$IMAGE" --image-on-top \
         --text "Select a folder to download\n and paste URL(s) into any field" \
-        --title="Youtube downloader" --button="Exit!gtk-cancel:1" --button="Download!gtk-ok:0" \
+        --button="Exit!gtk-cancel:1" --button="Download!gtk-ok:0" \
         --field="Enter Save directory:DIR" "$HOME/Downloads" \
-        --field="Download Options:CB" "Normal!Audio only (best)" \
+        --field="Download Options:CB" "Video (22/18/17)!Audio only (mp3)" \
         --field="Simultaneous Downloads:CB" "1!2!3!4!5" \
         --field="youtube url         1:" "" \
         --field="youtube url         2:" "" \
@@ -117,11 +121,11 @@ done
     SAVEDIR=${retChoice[0]} # directory path
     OPTION=${retChoice[1]}
     case $OPTION in
-    "Normal")
-       UTUBE="-f bestvideo+bestaudio"
+    "Video (22/18/17)")
+       UTUBE="-f 22/18/17"
     ;;
-    "Audio only (best)")
-       UTUBE="-f 141/bestaudio"
+    "Audio only (mp3)")
+       UTUBE="--extract-audio --audio-format mp3 --audio-quality 0"
     ;;
     esac
     MAXDLS=${retChoice[2]}  # maximum number of simultaneous downloads
@@ -155,7 +159,7 @@ for URL in ${URLIST[@]}; do
           DYNAMIC_COUNTER="$(($DYNAMIC_COUNTER+1))"  # iterate dinamic counter
     fi
     COUNTER="$[$COUNTER+1]"                    # iterate counter
-done | yad --multi-progress $YADBARS --title "$TITLE" --button=Cancel"!gtk-close:1" \
+done | yad --multi-progress $YADBARS --title "$TITLE" --button="Cancel!gtk-close:1" \
 --text "$TEXT" --center --window-icon "$ICON" --image "$IMAGE" --image-on-top --auto-close
 
 if (( $? == 1 ));then      # Download canceled, so clean up
@@ -163,7 +167,7 @@ if (( $? == 1 ));then      # Download canceled, so clean up
         kill $pid &>/dev/null         # kill any running download process
     done
     for url in ${URLIST[@]}; do
-        rm $(find $SAVEDIR -type f -name $url.* | grep part) &>/dev/null
+        rm "$(find $SAVEDIR -type f -name "*-$url.*" | grep part)" &>/dev/null #removes the part file
     done
     notify-send -t 3000 --icon "dialog-info" "Download cancelled"
     exit
