@@ -23,9 +23,8 @@
 
 # written by <damo> May 2016 @BunsenLabs
 # re-written by Misko_2083 <Miloš Pavlović> June 2016
-# Progress bar method used from Glutanimate's yad_wget script
-# Method used from Glutanimate's yad_wget script
-# https://github.com/Glutanimate/misc-scripts/blob/master/Internet/yad_wget
+#            Progress bar method used from Glutanimate's yad_wget script
+#            https://github.com/Glutanimate/misc-scripts/blob/master/Internet/yad_wget
 
 
 # Set GUI variables up
