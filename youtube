@@ -42,9 +42,6 @@ FIELDS=8
 ICON="browser-download"     # window icon (appears in launcher)
 IMAGE="browser-download"    # window image (appears in dialog)
 
-
-
-
 declare -i MODE
 MODE=1     # Defaiult dialog mode: 0 - Multi, 1 - Manual
 
