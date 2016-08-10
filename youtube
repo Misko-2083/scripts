@@ -21,24 +21,56 @@
 #               PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS), EVEN IF SUCH HOLDER OR OTHER 
 #               PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
-# written by <damo> May 2016 @BunsenLabs
-# re-written by Misko_2083 <Miloš Pavlović> June 2016
-#            Progress bar method used from Glutanimate's yad_wget script
-#            https://github.com/Glutanimate/misc-scripts/blob/master/Internet/yad_wget
+# based on a script by <damo> May 2016 @BunsenLabs
+# Misko_2083 <Miloš Pavlović> June 2016
+# Progress bar method used from Glutanimate's yad_wget script
+# https://github.com/Glutanimate/misc-scripts/blob/master/Internet/yad_wget
 
+declare -i SIMULTANEOUS
+declare -i FIELDS
 
 # Set GUI variables up
-TITLE="YAD youtube-dl wrapper"                 # dialog title
-TEXT="   <b>Downloads</b> in progress:"        # dialog text
-ICON="browser-download"          # window icon (appears in launcher)
-IMAGE="browser-download"                    # window image (appears in dialog)
+TITLE="YAD youtube-dl wrapper"    # dialog title
+
+TEXT="<b>Downloads</b> in progress...
+Cancel and Clean- removes *.part files
+Cancel - Just cancels the download"      # progress dialog text
+
+SIMULTANEOUS=2    # set default number of simultaneous downloads (1-5)
+FIELDS=8
+
+ICON="browser-download"     # window icon (appears in launcher)
+IMAGE="browser-download"    # window image (appears in dialog)
+
+
+
+
+declare -i MODE
+MODE=1     # Defaiult dialog mode: 0 - Multi, 1 - Manual
+
+
+# Set global variables
+FORMAT=""  # Set global variable for the format selection
+ENTRY=""   # Set global variable for the entry
+
+
 
 # Check youtube-dl is installed
 if ! hash youtube-dl &>/dev/null;then
-    DLG=$(yad --form --window-icon "$ICON" \
-        --borders=10 \
+    DLG=$(yad --form \
+        --borders=10 --image-on-top \
         --text="   youtube-dl not found\n\n  Install it first and run the script again" --button="gtk-ok:0" \
-        --title "$TITLE" --center --image "$IMAGE" \
+        --center --title "$TITLE" --window-icon "$ICON" --image "$IMAGE" \
+    )
+    exit
+fi
+
+# Check ffmpeg is installed
+if ! hash ffmpeg &>/dev/null;then
+    DLG=$(yad --form \
+        --borders=10 --image-on-top \
+        --text="   ffmpeg not found\n\n  Install it first and run the script again" --button="gtk-ok:0" \
+        --center --title "$TITLE" --window-icon "$ICON" --image "$IMAGE" \
     )
     exit
 fi
@@ -74,27 +106,126 @@ download() {
     fi
 }
 
-while :; do
-    ENTRY=$(yad --form --columns=1 --window-icon "$ICON" --center \
-        --borders=10 --title "$TITLE" --image "$IMAGE" --image-on-top \
-        --text "Select a folder to download\n and paste URL(s) into any field" \
-        --button="Exit!gtk-cancel:1" --button="Download!gtk-ok:0" \
-        --field="Enter Save directory:DIR" "$HOME/Downloads" \
-        --field="Download Options:CB" "Video (22/18/17)!Audio only (mp3)" \
-        --field="Simultaneous Downloads:CB" "1!2!3!4!5" \
-        --field="youtube url         1:" "" \
-        --field="youtube url         2:" "" \
-        --field="youtube url         3:" "" \
-        --field="youtube url         4:" "" \
-        --field="youtube url         5:" "" \
-        --field="youtube url         6:" "" \
-        --field="youtube url         7:" "" \         # make as many url fields as you need
-           )
+download_format(){
+    FILENAME="$(youtube-dl --get-filename "$1")"
+    #Format selection
+    FORMAT="$(youtube-dl -F "$1"  \
+      | sed 's/audio only/audio only  /;s/DASH video/DASH video /' \
+      | awk -F'\\s{2,}| , , ' 'NR>6 {for(i=1;i<=5;i++){print $i}}' \
+      | yad --list --width=600 --height=500 --column="format" \
+       --column="extension" --column="resolution" --column="type" --column="note" \
+       --button="back!back:2" --button="Exit!gtk-cancel:1" --button="Download!gtk-ok:0" \
+       --window-icon="$ICON" --image="$IMAGE" --image-on-top \
+       --text "$FILENAME\nSelect a format to download" --borders=10 \
+       --center --title "$TITLE" --window-icon "$ICON" --image "$IMAGE" \
+        )"
     RET=$?
 
-    if (( $RET == 1 )) || (( $RET == 252 ));then     # Canceled
+    if (( $RET == 2 )); then
+       main
+    elif (( $RET == 1 )) || (( $RET == 252 )); then    # Canceled or window closed
         exit
     fi
+
+    FORMAT=$(echo "$FORMAT" | cut -d '|' -f 1)
+
+    if [[ -z $FORMAT ]];then
+        yad --text="You haven't selected a download format\nDo you want to return to the main window?" \
+        --borders=10 --form --button="No!gtk-cancel:1" --button="Yes!gtk-ok:0" \
+        --center --title "$TITLE" --window-icon "$ICON" --image "$IMAGE"
+
+        RET=$?
+
+        if (( $RET == 1 )) || (( $RET == 252 ));then     # Canceled
+           exit
+        elif (( $RET == 0 )); then
+           main
+        fi
+    fi
+}
+
+
+
+
+dialog(){
+
+if [[ "$MODE" = "0" ]]; then
+    OIFS=$IFS # save Internal Field Separator
+    IFS=$'\n' # separator is "\n" in returned choices
+
+c=0
+YADFIELD=()
+
+while [[ ${c} -lt $FIELDS ]];do
+     c=$(($c+1))
+     YADFIELD+=($(echo -e "--field=\u2001"YouTube url\:          ${c}:NORM" \"\""))
+done
+
+    ENTRY="$(yad --form --columns=1 --window-icon "$ICON" --center \
+       --borders=10 --title "$TITLE" --image "$IMAGE" --image-on-top \
+       --text "Select a folder to download\n and paste URL(s) into any field" \
+       --button="Switch GUI!reload:2" --button="Exit!gtk-cancel:1" --button="Download!gtk-ok:0" \
+       --field="Enter Save directory:DIR" "$HOME/Downloads" \
+       --field="Download Options:CB" "Audio only (mp3)!Video (22/18/17)" \
+       --field="Simultaneous Downloads:NUM" "$SIMULTANEOUS!1..5!1" \
+       ${YADFIELD[@]} \
+        )"
+    RET=$?
+
+    IFS=$OIFS # reset IFS back to default
+
+    case "$RET" in
+       0)    #  Continue
+       ;;
+       1)      # Canceled
+       exit
+       ;;
+       2)
+       MODE=1
+       dialog
+       ;;
+       252)    # Window Closed
+       exit
+       ;;
+       *)
+       exit
+       ;;
+   esac
+elif [[ "$MODE" = "1" ]]; then
+    ENTRY="$(yad --form --columns=1 --window-icon "$ICON" --center \
+       --borders=10 --title "$TITLE" --image "$IMAGE" --image-on-top \
+       --text "Select a folder to download\n and paste URL(s) into any field" \
+       --button="Switch GUI!reload:2" --button="Exit!gtk-cancel:1" --button="Format!gtk-ok:0" \
+       --field="Enter Save directory:DIR" "$HOME/Downloads" \
+       --field="Download Options:CB" "Manual" \
+       --field="Simultaneous Downloads:NUM" "1!1..1!1" \
+       --field="youtube url:" "" \    # Only one url field for the Manual format selection
+       )"
+    RET=$?
+
+    case "$RET" in
+       0)     # Continue
+       ;;
+       1)      # Canceled
+       exit
+       ;;
+       2)
+       MODE=0
+       dialog
+       ;;
+       252)    # Window Closed
+       exit
+       ;;
+       *)
+       exit
+       ;;
+    esac
+fi
+}
+
+main(){
+while :; do
+    dialog     # calls the main dialog
 
     OIFS=$IFS # save Internal Field Separator
     IFS="|" # separator is "|" in returned choices
@@ -108,7 +239,7 @@ while :; do
 for ret in $ENTRY;do
     retChoice[$i]="$ret"
     i=$(($i+1))                    # iterate i
-    if [[ "$i" -gt 3 ]] && [[ "$ret" != "" ]];then  # get form fields if they are not empty
+    if [[ "$i" -gt 3 ]] && [[ "$ret" != "" ]];then   # get form fields if they are not empty
        URLIST[$e]="${ret##*'='}"                     # extract filename
        YADBARS="$YADBARS --bar=${URLIST[$e]}:NORM"   # add bars to a yad multiprogress dialog
        e=$(($e+1))                    # iterate e
@@ -137,8 +268,19 @@ done
     fi
 done
 
+if [[ "$MODE" = "1" ]]; then
+    for URL in ${URLIST[@]}; do
+        download_format "https://www.youtube.com/watch?v=$URL" # call format selection dialog
+        UTUBE="-f $FORMAT"
+    done
+fi
+}
 
-IFS=" "
+main  # Call the main loop
+
+OIFS=$IFS # save Internal Field Separator
+IFS=" " # separator is " " in returned choices
+
 COUNTER="1"
 DYNAMIC_COUNTER="1"
 PID=()
@@ -158,7 +300,7 @@ for URL in ${URLIST[@]}; do
           DYNAMIC_COUNTER="$(($DYNAMIC_COUNTER+1))"  # iterate dinamic counter
     fi
     COUNTER="$[$COUNTER+1]"                    # iterate counter
-done | yad --multi-progress $YADBARS --title "$TITLE" --button="Cancel!gtk-close:1" \
+done | yad --multi-progress $YADBARS --title "$TITLE" --button="Cancel and Clean!gtk-close:1" --button="Cancel!gtk-close:0" \
 --text "$TEXT" --center --window-icon "$ICON" --image "$IMAGE" --image-on-top --auto-close
 
 if (( $? == 1 ));then      # Download canceled, so clean up
@@ -171,3 +313,5 @@ if (( $? == 1 ));then      # Download canceled, so clean up
     notify-send -t 3000 --icon "dialog-info" "Download cancelled"
     exit
 fi
+
+IFS=$OIFS # reset IFS back to default
